@@ -1,0 +1,69 @@
+{
+    "states": [
+        {
+           "name": "NIGHT2",
+           "leds": "red",
+           "blink": false
+        },
+        {
+           "name": "CAN_GET_UP",
+           "leds": "green",
+           "blink": false
+        },
+        {
+           "name": "MUST_GET_UP",
+           "leds": "green",
+           "blink": true
+        },
+        {
+           "name": "DAY",
+           "leds": null,
+           "blink": false
+        },
+        {
+           "name": "NIGHT1",
+           "leds": "red",
+           "blink": false
+        }
+    ],
+    "rules": [
+        {
+            "name": "holidays_2024",
+            "cond_date": [
+                "2024-12-24",
+                "2024-12-25",
+                "2024-12-26",
+                "2024-12-27",
+                "2024-12-28",
+                "2024-12-29",
+                "2024-12-30",
+                "2024-12-31"
+            ],
+            "transitions": [
+                "07:20",
+                null,
+                "09:00",
+                "19:00"
+            ]
+        },
+        {
+            "name": "default_weekend",
+            "cond_weekday": [5, 6],
+            "transitions": [
+                "07:00",
+                null,
+                "08:00",
+                "19:00"
+            ]
+        },
+        {
+            "name": "default_weekday",
+            "transitions": [
+                "06:30",
+                "07:00",
+                "08:00",
+                "19:00"
+            ]
+        }
+    ]
+}
