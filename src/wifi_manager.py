@@ -5,6 +5,7 @@ import time
 import requests
 
 from datetime import datetime
+from logging import log as print
 
 
 class WifiManager:

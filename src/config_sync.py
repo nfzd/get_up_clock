@@ -1,5 +1,6 @@
 from datetime import date, datetime
 
+from logging import log as print
 from wifi_manager import WifiManager
 
 

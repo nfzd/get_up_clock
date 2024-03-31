@@ -2,6 +2,7 @@ import json
 import micropython
 from machine import Timer
 
+import logging
 from datetime import datetime
 from config_sync import ConfigSync
 from leds import LEDs
@@ -11,9 +12,11 @@ from wifi_manager import WifiManager
 
 
 # ----------------------------------------------------------------------
-# setup board
+# setup board and logging
 
 micropython.alloc_emergency_exception_buf(100)
+
+logging.setup()
 
 # ----------------------------------------------------------------------
 # configuration

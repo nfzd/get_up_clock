@@ -2,6 +2,7 @@ import json
 from machine import Timer
 
 from leds import LEDs
+from logging import log as print
 from datetime import date, datetime
 
 

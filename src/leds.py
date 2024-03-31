@@ -1,6 +1,8 @@
 from machine import Pin
 from time import sleep
 
+from logging import log as print
+
 
 class LEDs:
     '''
