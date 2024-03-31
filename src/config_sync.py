@@ -1,177 +1,136 @@
-import json
-import machine
-import ntptime
-import time
-import requests
+from datetime import date, datetime
 
-from now import Now
-from wifi import Wifi
+from wifi_manager import WifiManager
 
 
 class ConfigSync:
     '''
-    Online config and NTP syncing manager. Requires a Wifi instance passed to
-    __init__().
+    Online config syncing manager. Syncs config of one or multiple apps at
+    specified times.
 
     Example:
             # init
-            cfg_sync = ConfigSync(wifi, ("04:00", "16:00"))
+            cfg_sync = ConfigSync(wifi_man, ("04:00", "16:00"))
+
+            # register app
+            url = "https://..."
+            callback = lambda cfg: app.update(cfg)
+            cfg_sync.register(url, callback)
 
             # force sync
-            cfg_sync.sync()
+            cfg_sync.sync(force=True)
 
             # call e.g. once per minute and this will sync twice per day (as
             # specified in init), returns config if successful, False if sync
             # failed, or None if sync was skipped
-            cfg_sync.sync_maybe(now)
+            cfg_sync.sync()
 
             # get success of last sync
             print(cfg_sync.synced)
     '''
     def __init__(self,
-                 wifi: Wifi,
+                 wifi_man: WifiManager,
                  sync_times: list[str],
-                 cfg_url: str,
                  verbose: bool = True):
-        self._wifi = wifi
+        self.wifi_man = wifi_man
         self.sync_times = sync_times
-        self._sync_times_today = self._parse_sync_times()
-        self.cfg_url = cfg_url
+        self._sync_times_today = None
         self.verbose = verbose
 
         self._last_sync_date = None
-        self._cfg_file = 'cfg.json'
         self.synced = False
 
-        # load old config
+        self._registered_apps = []
 
-        try:
-            with open(self._cfg_file) as f:
-                self._cfg = json.load(f)
-
-        except Exception as ex:
-            print(f'[ConfigSync] ERROR loading old config: {ex}')
-            self._cfg = None
-
-    def _parse_sync_times(self):
+    def _get_sync_times_today(self):
         sync_times_today = []
+        today = date.today()
 
         for t in self.sync_times:
-            sync_times_today += [tuple(map(int, t.split(':')))]
+            sync_times_today += [datetime(
+                today.year,
+                today.month,
+                today.day,
+                *map(int, t.split(':')))]
 
-        return sorted(sync_times_today, key=lambda x: 60 * x[0] + x[1])
+        return sorted(sync_times_today)
 
-    def sync_maybe(self, now: Now):
+    def register_app(self, url: str, callback: Callable):
+        self._registered_apps += [(url, callback)]
+
+    def sync(self, force: bool = False):
         '''
         Sync if time matches the defined sync times or we haven't synced before.
         '''
         sync = False
-        now_date = now.date
+        now = datetime.now()
+        today = now.date()
 
         if self._last_sync_date is None:
             sync = True
-        else:
-            if self._last_sync_date != now_date:
-                self._sync_times_today = self._parse_sync_times()
 
-            while (len(self._sync_times_today) > 0):
-                if now.has_passed(*self._sync_times_today[0]):
-                    sync = True
-                    self._sync_times_today.pop(0)
-                    continue
+        if (
+            self._last_sync_date is None or
+            self._last_sync_date.year != today.year or
+            self._last_sync_date.month != today.month or
+            self._last_sync_date.day != today.day
+        ):
+            self._sync_times_today = self._get_sync_times_today()
 
-                break
+        while (len(self._sync_times_today) > 0):
+            if now >= self._sync_times_today[0]:
+                sync = True
+                self._sync_times_today.pop(0)
+                continue
+
+            break
 
         if not sync:
             return None
 
-        self._last_sync_date = now_date
-        return self.sync()
+        self._last_sync_date = today
 
-    def sync(self):
+        success = self._sync()
+
+        if not success:
+            # sync failed, try again next time sync is run
+            self._sync_times_today = [datetime.now()] + self._sync_times_today
+
+        return success
+
+    def _sync(self):
         self.synced = False
 
         if self.verbose:
             print('[ConfigSync] syncing NTP')
 
-        # activate wifi and sync
+        # activate wifi and sync ntp
 
-        if not self._wifi.connect():
+        if not self.wifi_man.connect():
             if self.verbose:
                 print('[ConfigSync] no wifi connetion, aborting')
             return False
 
-        try:
-            ntptime.settime()
-            if self.verbose:
-                print('[ConfigSync] NTP synced')
-        except OSError as ex:
-            if self.verbose:
-                print(f'[ConfigSync] NTP sync failed: {ex}')
-            return False
-
-        t = time.localtime()
-
-        if self.verbose:
-            print(f'[ConfigSync] utc={Now(t)}')
-
-        # correct for timezone and dst
-
-        try:
-            t = self.correct_time(t)
-            machine.RTC().datetime((t[0], t[1], t[2], t[6], t[3], t[4], t[5], 0))
-
-            if self.verbose:
-                print(f'[ConfigSync] localtime={Now()}')
-
-        except Exception as ex:
-            print(f'[ConfigSync] ERROR setting time: {ex}')
-            return False
-
         # download config
 
-        try:
-            response = requests.get(url=self.cfg_url)
-            cfg = response.json()
+        error = False
 
+        if not self._registered_apps:
             if self.verbose:
-                print(f'[ConfigSync] cfg downloaded')
+                print('[ConfigSync] no apps registered')
 
-            if cfg != self._cfg:
-                with open(self._cfg_file, 'w') as f:
-                    json.dump(cfg, f)
-
-            self._cfg = cfg
-
-        except Exception as ex:
-            print(f'[ConfigSync] ERROR getting config: {ex}')
-            return False
+        for url, callback in self._registered_apps:
+            data = self.wifi_man.get_json(url)
+            if data:
+                callback(data)
+            else:
+                error = True
 
         # wrap up
 
-        self._wifi.disconnect()
+        self.wifi_man.down()
 
-        self.synced = True
+        self.synced = not error
 
-        return cfg
-
-    def correct_time(self, t):
-        year = t[0]
-        dst_on = time.mktime((year, 3, 31 - (int(5 * year / 4 + 4) % 7), 1, 0, 0, 0, 0, 0))
-        dst_off = time.mktime((year, 10, 31 - (int(5 * year / 4 + 1)) % 7, 1, 0, 0, 0, 0, 0))
-
-        now = time.time()
-
-        if now < dst_on:
-            t = time.localtime(now + 3600)  # UTC + 1
-        elif now < dst_off:
-            t = time.localtime(now + 2 * 3600)  # UTC + 2
-        else:
-            t = time.localtime(now + 3600)  # UTC + 1
-
-        return t
-
-    @property
-    def cfg(self):
-        return self._cfg
+        return self.synced
 
