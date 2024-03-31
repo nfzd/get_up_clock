@@ -7,9 +7,9 @@ Uses a state machine with can be configured via a config file on the web. Suppor
 ## Setup
 
 * Connect some LEDs to the GPIO pins (with, e.g., a 470R in series).
-* Change `src/main.py`: define the pin groups and sync times.
+* Change `src/main.py`: define the pin groups (one or multiple LEDs for every state).
 * Create a config defining the desired states (with led groups on or blinking and state transition times), upload it wherever it makes sense.
-* Add wifi credentials and config URL to `src/secrets.py`.
+* Add wifi credentials, config URL, sync times, and time zone offset to `src/secrets.py`.
 * Copy all `.py` files in `src` to the board and run.
 
 Note: with a fresh Pico, you need to install MicroPython first. See the [docs](https://www.raspberrypi.com/documentation/microcontrollers/micropython.html).
