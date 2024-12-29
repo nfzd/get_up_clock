@@ -167,7 +167,7 @@ class WifiManager:
             ntptime.settime()
             if self.verbose:
                 print('[Wifi] NTP synced')
-        except OSError as ex:
+        except (OSError, OverflowError) as ex:
             if self.verbose:
                 print(f'[Wifi] NTP sync failed: {ex}')
             return False
