@@ -23,14 +23,18 @@ logging.setup()
 # configuration
 
 #
-# Define LED groups with a descriptive name (here: 'red' and 'green'), each
+# Define LED groups with a descriptive name (here: "red" and "green"), each
 # controlled by one or multiple GPIO pins. The groups are used in the state
 # config file.
 #
-leds = LEDs(status='LED', red=(14, 15), green=(16, 17), test_all=True)
+leds = LEDs(status="LED", red=(14, 15), green=(16, 17), test_all=True)
+app_leds = leds
+
+#
 # Alternative: use a Neopixel.
 #
-#leds = NeoPixel(Pin(22), 1)
+# leds = LEDs(status="LED")
+# app_leds = NeoPixel(Pin(22), 1)
 
 #
 # Define wifi SSID and password as well as time zone offset in secrets.py
@@ -48,9 +52,7 @@ cfg_sync = ConfigSync(wifi_man, sync_times)
 # Use some of the LED group names defined above here, these groups will blink
 # together if a config error (parsing or applying) occured.
 #
-app = GetUpClock(
-    leds,
-    error_state_leds='night,day')
+app = GetUpClock(app_leds)
 cfg_sync.register_app(cfg_url, app.update_data)
 
 #

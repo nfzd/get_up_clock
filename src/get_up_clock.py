@@ -41,6 +41,7 @@ class GetUpClock:
 
         self._state = None
         self._last_date = None
+        self._fader = None
         self._timer = None
 
         self.load_cache()
@@ -152,6 +153,9 @@ class GetUpClock:
                 print(f'[GetUpClock] ERROR parsing cfg: {ex}')
                 self._transitions_today = None
 
+        if self._fader is not None:
+            self._fader.step()
+
         try:
             new_state = None
 
@@ -166,18 +170,37 @@ class GetUpClock:
                 break
 
             if new_state is not None:
-                self._activate_state(new_state)
+                # get following state (for transitions)
+                if len(self._transitions_today) > 0:
+                    following_time = self._transitions_today[0][0]
+                    following_state = self._transitions_today[0][1]
+                else:
+                    following_time = None
+                    following_state = None
+
+                self._activate_state(
+                    new_state,
+                    following_state,
+                    following_time)
 
         except Exception as ex:
             print(f'[GetUpClock] ERROR applying rules: {ex}')
-            self._activate_state(self.error_state)
+            self._activate_state(self.error_state, None, None)
 
         self._last_date = now.date()
 
-    def _activate_state(self, state: dict):
+    def _activate_state(
+        self,
+        state: dict,
+        following_state: dict,
+        following_time: datetime,
+    ):
         if self._state != state:
             if self.verbose:
                 print(f'[GetUpClock] activating state {state["name"]}')
+
+            if self._fader is not None:
+                self._fader = None
 
             if self._timer is not None:
                 self._timer.deinit()
@@ -211,10 +234,35 @@ class GetUpClock:
                 else:
                     rgb = hex_to_rgb(color, state.get("luminosity", 1))
 
+                    if state.get("transition"):
+                        assert following_state is not None
+                        assert "color" in following_state
+                        assert following_time is not None
+
+                        if state.get("blink"):
+                            def apply_func(color):
+                                pass
+                        else:
+                            def apply_func(color):
+                                self.leds.fill(color)
+                                self.leds.write()
+
+                        self._fader = FaderState(
+                            start=datetime.now(),
+                            end=following_time,
+                            color_start=rgb,
+                            color_end=hex_to_rgb(following_state["color"]),
+                            apply_func=apply_func)
+
                     if state.get("blink"):
-                        def on():
-                            self.leds.fill(rgb)
-                            self.leds.write()
+                        if state.get("transition"):
+                            def on():
+                                self._fader.fill(rgb)
+                                self.leds.write()
+                        else:
+                            def on():
+                                self.leds.fill(rgb)
+                                self.leds.write()
 
                         def off():
                             self.leds.fill((0, 0, 0))
@@ -245,6 +293,34 @@ class TimerState:
     def next(self, *args, **kwargs):
         self.steps[self.current_step]()
         self.current_step = (self.current_step + 1) % len(self.steps)
+
+
+class FaderState:
+    def __init__(
+        self,
+        start: datetime,
+        end: datetime,
+        color_start: tuple,
+        color_end: tuple,
+        apply_func,
+    ):
+        self.start = start
+        self.end = end
+        self.color_start = color_start
+        self.color_end = color_end
+        self.apply_func = apply_func
+
+        self.current = color_start
+        self.diff = start.diff_seconds(end)
+        assert self.diff > 0
+
+    def step(self, *args, **kwargs):
+        progress = 1 - datetime.now().diff_seconds(self.end) / self.diff
+        color = [(v1 - v0) * progress + v0 for v0, v1 in zip(self.color_start, self.color_end)]
+        color = [int(round(v)) for v in color]
+        color = clip(color, 0, 255)
+        self.apply_func(color)
+        self.current = color
 
 
 def hex_to_rgb(
