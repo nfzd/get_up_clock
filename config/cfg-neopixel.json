@@ -2,28 +2,26 @@
     "states": [
         {
            "name": "NIGHT2",
-           "leds": "red",
-           "blink": false
+           "color": "#ff0000",
+           "luminosity": 0.4
         },
         {
            "name": "CAN_GET_UP",
-           "leds": "green",
-           "blink": false
+           "color": "#00ff00",
+           "luminosity": 0.4
         },
         {
            "name": "MUST_GET_UP",
-           "leds": "green",
+           "color": "#00ffff",
            "blink": true
         },
         {
-           "name": "DAY",
-           "leds": null,
-           "blink": false
+           "name": "DAY"
         },
         {
            "name": "NIGHT1",
-           "leds": "red",
-           "blink": false
+           "color": "#ff0000",
+           "luminosity": 0.4
         }
     ],
     "rules": [

@@ -16,7 +16,11 @@ Note: with a fresh Pico, you need to install MicroPython first. See the [docs](h
 
 ## Configuration
 
-See `config/cfg.json` for an example. This example is for the following LED specification in `src/main.py`:
+See `config/cfg-leds.json` and `config/cfg-neopixel.json` for examples.
+
+### Simple LEDS
+
+Here, we use the following LED specification in `src/main.py`:
 
 ```python
 leds = LEDs(status='LED', red=(14, 15), green=(16, 17), test_all=True)
@@ -31,13 +35,11 @@ The configuration is a JSON dict with two keys: `states` and `rules`. The former
     "states": [
         {
            "name": "NIGHT2",
-           "leds": "red",
-           "blink": false
+           "leds": "red"
         },
         {
            "name": "CAN_GET_UP",
-           "leds": "green",
-           "blink": false
+           "leds": "green"
         },
         {
            "name": "MUST_GET_UP",
@@ -45,14 +47,11 @@ The configuration is a JSON dict with two keys: `states` and `rules`. The former
            "blink": true
         },
         {
-           "name": "DAY",
-           "leds": null,
-           "blink": false
+           "name": "DAY"
         },
         {
            "name": "NIGHT1",
-           "leds": "red",
-           "blink": false
+           "leds": "red"
         }
     ],
 ```
@@ -111,3 +110,46 @@ Every day, the rules are checked in order, and the first rule whose conditions a
 For each rule, the transitions times can be specified. The first state always begins at 00:00. The first time specified in the transition list defines the time of switching from the first to the second state (and so on). A transition time can be set to `null`, in which case the state will be skipped (here, the MUST_GET_UP state is skipped for rules `holidays_2024` and `default_weekend`).
 
 Note: state and rule names are only used for logging / debugging.
+
+### Neopixel
+
+When using a NeoPixel, the following LED specification in `src/main.py` could be used:
+
+```python
+leds = NeoPixel(Pin(22), 1)
+```
+
+In this case, states can be defined as follows:
+
+```json
+
+    "states": [
+        {
+           "name": "NIGHT2",
+           "color": "#ff0000",
+           "luminosity": 0.4
+        },
+        {
+           "name": "CAN_GET_UP",
+           "color": "#00ff00",
+           "luminosity": 0.4
+        },
+        {
+           "name": "MUST_GET_UP",
+           "color": "#00ffff",
+           "blink": true
+        },
+        {
+           "name": "DAY"
+        },
+        {
+           "name": "NIGHT1",
+           "color": "#ff0000",
+           "luminosity": 0.4
+        }
+    ],
+```
+
+If no luminosity is specified, the maximum intensity is used.
+
+See above for how to define rules.

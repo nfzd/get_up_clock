@@ -1,5 +1,7 @@
 import json
+
 from machine import Timer
+from neopixel import NeoPixel
 
 from leds import LEDs
 from logging import log as print
@@ -9,10 +11,10 @@ from datetime import date, datetime
 class GetUpClock:
     def __init__(
         self,
-        leds: LEDs,
+        leds: LEDs | NeoPixel,
         error_state_leds: str = None,
         blink_period: int = 1000,  # ms
-        cache_file: str = 'cache_clock.json',
+        cache_file: str = "cache_clock.json",
         verbose: bool = True,
     ):
         self.leds = leds
@@ -20,13 +22,22 @@ class GetUpClock:
         self.cache_file = cache_file
         self.verbose = verbose
 
-        self.error_state = {
-            'name': 'RULE_ERROR',
-            'leds': error_state_leds,
-            'blink': True,
-        }
-        if error_state_leds is not None:
-            self.error_state['leds'] = error_state_leds
+        if isinstance(leds, LEDs):
+            self.error_state = {
+                "name": "RULE_ERROR",
+                "leds": "all",
+                "blink": True,
+            }
+            if error_state_leds is not None:
+                self.error_state["leds"] = error_state_leds
+        else:
+            assert isinstance(leds, NeoPixel)
+            self.error_state = {
+                "name": "RULE_ERROR",
+                "color": "#ff0000",
+                "luminosity": .5,
+                "blink": True,
+            }
 
         self._state = None
         self._last_date = None
@@ -170,24 +181,103 @@ class GetUpClock:
 
             if self._timer is not None:
                 self._timer.deinit()
-                self._timer_toggle_leds = None
+                self._timer_state = TimerState()
 
-            self.leds.all.off()
+            if isinstance(self.leds, LEDs):
+                self.leds.all.off()
 
-            if state['leds']:
-                if state['blink']:
-                    self._timer_toggle_leds = state['leds']
-                    self._timer = Timer(
-                        mode=Timer.PERIODIC,
-                        period=self.blink_period,
-                        callback=self._timer_callback)
+                if state.get("leds"):
+                    groups = [getattr(self.leds, group) for group in state["leds"].split(",")]
+
+                    if state.get("blink"):
+                        self._timer_state = TimerState([
+                            lambda: [group.toggle() for group in groups],
+                            lambda: [group.toggle() for group in groups],
+                        ])
+                        self._timer = Timer(
+                            mode=Timer.PERIODIC,
+                            period=self.blink_period,
+                            callback=self._timer_state.next)
+                    else:
+                        [group.on() for group in groups]
+            else:
+                assert isinstance(self.leds, NeoPixel)
+
+                color = state.get("color", None)
+
+                if color is None:
+                    self.leds.fill((0, 0, 0))
+                    self.leds.write()
                 else:
-                    for group in state['leds'].split(','):
-                        getattr(self.leds, group).on()
+                    rgb = hex_to_rgb(color, state.get("luminosity", 1))
+
+                    if state.get("blink"):
+                        def on():
+                            self.leds.fill(rgb)
+                            self.leds.write()
+
+                        def off():
+                            self.leds.fill((0, 0, 0))
+                            self.leds.write()
+
+                        self._timer_state = TimerState([on, off])
+                        self._timer = Timer(
+                            mode=Timer.PERIODIC,
+                            period=self.blink_period,
+                            callback=self._timer_state.next)
+                    else:
+                        self.leds.fill(rgb)
+                        self.leds.write()
 
             self._state = state
 
-    def _timer_callback(self, t):
-        for group in self._timer_toggle_leds.split(','):
-            getattr(self.leds, group).toggle()
+
+class TimerState:
+    def __init__(
+        self,
+        steps: list = [],
+        *,
+        current_step: int = 0,
+    ):
+        self.current_step = current_step
+        self.steps = steps
+
+    def next(self, *args, **kwargs):
+        self.steps[self.current_step]()
+        self.current_step = (self.current_step + 1) % len(self.steps)
+
+
+def hex_to_rgb(
+    color: str,
+    luminosity: int | float = 1,
+):
+    if len(color) == 7:
+        assert color.startswith("#")
+        color = color[1:]
+    else:
+        assert len(color) == 6
+
+    r, g, b = color[:2], color[2:4], color[4:]
+    r, g, b = int(r, 16), int(g, 16), int(b, 16)
+
+    if luminosity != 1:
+        luminosity = clip(luminosity, 0, 1)
+        r, g, b = r * luminosity, g * luminosity, b * luminosity
+        r, g, b = map(int, map(round, (r, g, b)))
+
+    return clip([r, g, b], 0, 255)
+
+
+def clip(
+    v: int | float | list[int | float],
+    vmin: int | float | None = None,
+    vmax: int | float | None = None,
+):
+    if isinstance(v, list):
+        return [clip(v0, vmin, vmax) for v0 in v]
+    if vmin is not None:
+        v = max(v, vmin)
+    if vmax is not None:
+        v = min(v, vmax)
+    return v
 

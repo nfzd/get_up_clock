@@ -1,6 +1,7 @@
 import json
 import micropython
-from machine import Timer
+from machine import Pin, Timer
+from neopixel import NeoPixel
 
 import logging
 from datetime import datetime
@@ -27,6 +28,9 @@ logging.setup()
 # config file.
 #
 leds = LEDs(status='LED', red=(14, 15), green=(16, 17), test_all=True)
+# Alternative: use a Neopixel.
+#
+#leds = NeoPixel(Pin(22), 1)
 
 #
 # Define wifi SSID and password as well as time zone offset in secrets.py
